@@ -1140,6 +1140,16 @@ export default function Trials({ onMenuClick }) {
     return { chartData, maxDaa, maxCover, baseCover, W, H, PX, PY, PB, cx, cy, pts, wcePts, lastWce };
   }, [detailEfficacy]);
 
+  // Status class mapping for observations
+  const STATUS_CLS = useMemo(() => ({ Controlled: 'bg-emerald-100 text-emerald-800', Eliminated: 'bg-emerald-200 text-emerald-900', Suppressed: 'bg-blue-100 text-blue-800', 'Top-kill': 'bg-teal-100 text-teal-800', Burndown: 'bg-orange-100 text-orange-800', Regrowth: 'bg-red-100 text-red-800', 'Re-emerged': 'bg-red-200 text-red-800', Resistant: 'bg-rose-200 text-rose-900', Unaffected: 'bg-slate-200 text-slate-700', Emerged: 'bg-amber-100 text-amber-800', 'Not detected': 'bg-slate-100 text-slate-500' }), []);
+
+  // Pre-compute observations sorting and values
+  const obsData = useMemo(() => {
+    const sorted = [...detailEfficacy].sort((a, b) => (a.daa ?? 0) - (b.daa ?? 0));
+    const baseCover = parseFloat(sorted[0]?.weedCover ?? 0) || 0;
+    return { sorted, baseCover };
+  }, [detailEfficacy]);
+
   // ── QR CODE GENERATOR ─────────────────────────────────────────────
   const generateQR = useCallback(async (trial) => {
     if (!trial || !qrCanvasRef.current) return;
@@ -1840,26 +1850,21 @@ Write a professional, concise narrative summary.`;
               )}
 
               {/* Observations Tab */}
-              {detailTab === 'observations' && (() => {
-                const sorted = [...detailEfficacy].sort((a, b) => (a.daa ?? 0) - (b.daa ?? 0));
-                const baseCover = parseFloat(sorted[0]?.weedCover ?? 0) || 0;
-                const controlDays = (() => {
+              {detailTab === 'observations' && (
+                (() => {
+                  const { sorted, baseCover } = obsData;
+                  let controlDays = null;
                   if (detailTrial.ControlFinalized === true || detailTrial.ControlFinalized === 'true') {
-                    if (detailTrial.FinalControlDuration) return `${detailTrial.FinalControlDuration} days (final)`;
-                    if (detailTrial.FinalizationDate && detailTrial.Date) {
+                    if (detailTrial.FinalControlDuration) controlDays = `${detailTrial.FinalControlDuration} days (final)`;
+                    else if (detailTrial.FinalizationDate && detailTrial.Date) {
                       const d = Math.floor((new Date(detailTrial.FinalizationDate) - new Date(detailTrial.Date)) / 86400000);
-                      return `${Math.max(0, d)} days (final)`;
-                    }
-                    return 'Finalized';
-                  }
-                  if (detailTrial.Date) {
+                      controlDays = `${Math.max(0, d)} days (final)`;
+                    } else controlDays = 'Finalized';
+                  } else if (detailTrial.Date) {
                     const d = Math.floor((new Date() - new Date(detailTrial.Date)) / 86400000);
-                    return `${Math.max(0, d)} days active`;
+                    controlDays = `${Math.max(0, d)} days active`;
                   }
-                  return null;
-                })();
-                const STATUS_CLS = { Controlled: 'bg-emerald-100 text-emerald-800', Eliminated: 'bg-emerald-200 text-emerald-900', Suppressed: 'bg-blue-100 text-blue-800', 'Top-kill': 'bg-teal-100 text-teal-800', Burndown: 'bg-orange-100 text-orange-800', Regrowth: 'bg-red-100 text-red-800', 'Re-emerged': 'bg-red-200 text-red-800', Resistant: 'bg-rose-200 text-rose-900', Unaffected: 'bg-slate-200 text-slate-700', Emerged: 'bg-amber-100 text-amber-800', 'Not detected': 'bg-slate-100 text-slate-500' };
-                return (
+                  return (
                   <div>
                     <div className="flex justify-between items-center mb-3">
                       <div>
@@ -1979,8 +1984,9 @@ Write a professional, concise narrative summary.`;
                       </div>
                     )}
                   </div>
-                );
-              })()}
+                  );
+                })()
+              )}
 
               {/* Photos Tab */}
               {detailTab === 'photos' && (

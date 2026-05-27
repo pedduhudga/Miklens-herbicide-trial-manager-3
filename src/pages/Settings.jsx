@@ -15,6 +15,20 @@ export default function Settings({ onMenuClick }) {
   const [keyTestResult, setKeyTestResult] = useState({});
   const logoInputRef = useRef(null);
 
+  // Multi-provider AI keys from localStorage
+  const [aiKeys, setAiKeys] = useState({
+    gemini: localStorage.getItem('AI_KEY_GEMINI') || '',
+    groq: localStorage.getItem('AI_KEY_GROQ') || '',
+    pixtral: localStorage.getItem('AI_KEY_PIXTRAL') || ''
+  });
+
+  const saveAiKey = (provider, key) => {
+    const newKeys = { ...aiKeys, [provider]: key };
+    setAiKeys(newKeys);
+    localStorage.setItem(`AI_KEY_${provider.toUpperCase()}`, key);
+    toast(`${provider.charAt(0).toUpperCase() + provider.slice(1)} API key saved`);
+  };
+
   const toast = (msg, type = 'success') =>
     window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg, type } }));
 
@@ -286,6 +300,77 @@ export default function Settings({ onMenuClick }) {
                 <p className="text-xs text-gray-500">When enabled, each photo upload uses 1 API call. Disable to save quota.</p>
               </div>
             </label>
+          </div>
+        </div>
+
+        {/* ── Multi-Provider AI Keys ── */}
+        <div className="bg-white p-6 rounded-lg shadow space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-700 mb-1">AI Photo Analysis Keys</h2>
+            <p className="text-sm text-gray-600">Add API keys for multi-provider AI weed analysis. The app auto-rotates providers if one fails.</p>
+          </div>
+
+          {/* Groq API Key */}
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+              Groq API Key (Llama 3.2 Vision)
+              <span className="text-xs text-gray-500">· 1000 calls/day free</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={aiKeys.groq}
+                onChange={e => saveAiKey('groq', e.target.value)}
+                placeholder="gsk_..."
+                className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Get free key at <a href="https://console.groq.com" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">console.groq.com</a></p>
+          </div>
+
+          {/* Gemini API Key */}
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              Gemini API Key (Flash/Pro)
+              <span className="text-xs text-gray-500">· 1000 calls/day free</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={aiKeys.gemini}
+                onChange={e => saveAiKey('gemini', e.target.value)}
+                placeholder="AIza..."
+                className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Get free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">aistudio.google.com</a></p>
+          </div>
+
+          {/* Pixtral API Key */}
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+              Pixtral/Mistral API Key
+              <span className="text-xs text-gray-500">· 10000 calls/day free tier</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={aiKeys.pixtral}
+                onChange={e => saveAiKey('pixtral', e.target.value)}
+                placeholder="..."
+                className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-purple-400"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Get key at <a href="https://console.mistral.ai" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">console.mistral.ai</a></p>
+          </div>
+
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-xs text-amber-800">
+              <strong>Priority Order:</strong> Groq → Gemini Flash → Gemini Pro → Pixtral. The app automatically rotates to the next provider if one fails or hits quota.
+            </p>
           </div>
         </div>
 
