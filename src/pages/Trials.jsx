@@ -1547,7 +1547,7 @@ export default function Trials({ onMenuClick }) {
         return `  ${sp}: ${trajectory} | WCE ${spWce}% | Best suppression ${spMin}% at DAA${spMinDaa} | Final ${spFinal}%`;
       }).join('\n') || '  No per-species data recorded.';
 
-      const prompt = `You are a senior agronomist writing a professional trial narrative for a herbicide field trial report.
+      const prompt = `You are a senior agronomist writing a professional herbicide field trial narrative for an official report.
 
 TRIAL DATA:
 - Product: ${detailTrial.FormulationName}
@@ -1567,31 +1567,39 @@ PER-SPECIES BREAKDOWN:
 ${speciesAnalysis}
 
 HERBICIDE CONTROL DURATION BENCHMARKS (use these exact thresholds):
-- ≤7 days of effective suppression = POOR (unacceptable, product failed)
-- 8–17 days = FAIR (marginal, short-residual, may need reapplication)
-- 18–27 days = GOOD (commercially acceptable for most situations)
-- 28+ days = EXCELLENT (strong residual control, high-performance product)
+- ≤7 days of effective suppression = Poor (unacceptable, product failed)
+- 8–17 days = Fair (marginal, short-residual, may need reapplication)
+- 18–27 days = Good (commercially acceptable for most situations)
+- 28+ days = Excellent (strong residual control, high-performance product)
 - "Effective suppression" means cover stayed below 30% of initial level before significant regrowth.
 - If cover INCREASES at later DAAs after an initial drop, regrowth is occurring — note the regrowth DAA.
 - If cover never drops meaningfully (<20% reduction), the product had NO effective control on that species.
 
-TASK: Write a structured professional trial narrative with these sections:
+STRICT FORMATTING RULES — follow exactly:
+1. Do NOT use any markdown (no **, no *, no #, no bullet dashes). Use plain text only.
+2. Section headings must be written as: "2. Overall Efficacy Trajectory" on its own line (number + title, no bold or symbols).
+3. Species sub-headings must be written as: "Common Name (Scientific Name)" on its own line before the description.
+4. Always write full common name + scientific name in parentheses for every species (e.g. "Bermuda Grass (Cynodon dactylon)").
+5. Do NOT include a Recommendation section.
+6. Write in third person, past tense for finalized trials, present tense for ongoing.
 
-**1. Application & Setup (1 sentence):** What was applied, dosage, date, location, target weeds.
+OUTPUT STRUCTURE — write exactly these 4 sections:
 
-**2. Overall Efficacy Trajectory (2-3 sentences):** Describe the total cover trend across ALL observation points — initial knockdown phase, when minimum cover was reached, and whether regrowth occurred and at what DAA.
+1. Application & Setup
+One sentence: product name, dosage, application date, location, and target weed species (with scientific names).
 
-**3. Per-Species Performance (1-2 sentences per species):** For EACH species in the per-species breakdown:
-   - State whether the product effectively controlled this species or not.
-   - If controlled: at what DAA cover was minimised, how long suppression lasted.
-   - If NOT controlled or regrowth occurred: say so explicitly (e.g. "showed initial knockdown but regrew to X% by DAA Y" or "demonstrated no meaningful control").
-   - Identify which species responded BEST and which responded WORST.
+2. Overall Efficacy Trajectory
+2-3 sentences describing the total cover trend across ALL observation points. Note: any knockdown phase, when minimum cover was achieved, whether cover increased again (regrowth), and at which DAA.
 
-**4. Control Duration Assessment (1-2 sentences):** Based on the benchmarks above, rate the overall control duration as Poor/Fair/Good/Excellent and explain WHY using the actual DAA numbers.
+3. Species-wise Performance
+For EACH species in the per-species breakdown, write the species heading then 1-2 sentences:
+- If no control: state cover at each observed DAA and note no observable reduction.
+- If partial or good control: state cover trajectory, at which DAA minimum was reached, and how long suppression lasted.
+- End with one sentence summarising which species showed the best and worst response overall.
 
-**5. Recommendation (1 sentence):** A practical agronomic recommendation based on the data (e.g. adjust rate, add tank-mix partner for resistant species, suitable for broad-spectrum use, etc.).
+4. Control Duration Interpretation
+1-2 sentences: rate the treatment as Poor / Fair / Good / Excellent based on the benchmarks. Explain the rating using actual DAA numbers and cover values. Be honest — do not soften poor results.`;
 
-Be direct and honest — do not soften poor results. Write in third person. Use the benchmark thresholds strictly.`;
 
       // Use first available Gemini model (try 2.5-flash as reliable stable model)
       const model = 'gemini-2.5-flash';
