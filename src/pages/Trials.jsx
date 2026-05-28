@@ -119,6 +119,7 @@ export default function Trials({ onMenuClick }) {
   // --- Camera & Grid ---
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isGridOpen, setIsGridOpen] = useState(false);
+  const [gridCoverPct, setGridCoverPct] = useState(0);
   const [cameraMode, setCameraMode] = useState('general');
   const fileInputRef = useRef(null);
 
@@ -3439,9 +3440,47 @@ Exactly 2 sentences. Follow this structure:
       )}
 
       {/* ── GRID WEED COVER TOOL ── */}
-      {isGridOpen && (
-        <GridWeedCoverTool onClose={() => setIsGridOpen(false)} onResult={handleGridResult} />
-      )}
+      {isGridOpen && (() => {
+        const photos = safeJsonParse(activeTrial?.PhotoURLs, []);
+        const lastPhoto = photos.length ? photos[photos.length - 1] : null;
+        const imgUrl = lastPhoto?.url || lastPhoto?.fileData || null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+                <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                  <Grid className="w-4 h-4 text-blue-600" /> Grid Weed Cover Tool
+                </h2>
+                <button onClick={() => setIsGridOpen(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-5 flex-1">
+                {!imgUrl && (
+                  <p className="text-sm text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-4">
+                    No photo found for this trial. Upload a photo first, then use the Grid Tool to measure weed cover.
+                  </p>
+                )}
+                <GridWeedCoverTool
+                  imageUrl={imgUrl}
+                  onUpdate={(data) => setGridCoverPct(data.cover ?? 0)}
+                />
+              </div>
+              <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200">
+                <button onClick={() => setIsGridOpen(false)} className="px-4 py-2 text-sm rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50">
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { handleGridResult(gridCoverPct); setGridCoverPct(0); }}
+                  className="px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                >
+                  Confirm Cover ({gridCoverPct}%)
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
