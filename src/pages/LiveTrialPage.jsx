@@ -91,6 +91,15 @@ export default function LiveTrialPage() {
   const finalWce = latest ? calcWce(baseline, parseFloat(latest.weedCover ?? 0)) : null;
   const isActive = trial.IsCompleted !== true && trial.IsCompleted !== 'true';
 
+  // Per-trial field visibility — defaults all to true if not set
+  const defaultShow = {
+    showFormulationName: true, showInvestigatorName: true, showDate: true,
+    showDosage: true, showLocation: true, showWeedSpecies: true,
+    showReplication: true, showResult: true,
+    showObservations: true, showPhotos: true, showAISummary: true,
+  };
+  const show = { ...defaultShow, ...safeJson(trial.LiveQRSettings, {}) };
+
   const statusColor = isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700';
 
   return (
@@ -120,15 +129,17 @@ export default function LiveTrialPage() {
           <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Trial Details</h2>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             {[
-              ['Trial ID', trial.ID],
-              ['Investigator', trial.InvestigatorName || '—'],
-              ['Application Date', fmtDate(trial.Date)],
-              ['Dosage', trial.Dosage || '—'],
-              ['Location', trial.Location || '—'],
-              ['Target Weeds', trial.WeedSpecies || '—'],
-              ['Replication', trial.Replication || '—'],
-              ['Status', isActive ? 'Active' : 'Completed'],
-            ].map(([label, value]) => (
+              ['Trial ID', trial.ID, true],
+              ['Product', trial.FormulationName || '—', show.showFormulationName],
+              ['Investigator', trial.InvestigatorName || '—', show.showInvestigatorName],
+              ['Application Date', fmtDate(trial.Date), show.showDate],
+              ['Dosage', trial.Dosage || '—', show.showDosage],
+              ['Location', trial.Location || '—', show.showLocation],
+              ['Target Weeds', trial.WeedSpecies || '—', show.showWeedSpecies],
+              ['Replication', trial.Replication || '—', show.showReplication],
+              ['Result', trial.Result || '—', show.showResult],
+              ['Status', isActive ? 'Active' : 'Completed', true],
+            ].filter(([, , visible]) => visible).map(([label, value]) => (
               <div key={label}>
                 <p className="text-xs text-slate-400 font-semibold">{label}</p>
                 <p className="text-slate-700 font-medium break-words">{value}</p>
@@ -138,7 +149,7 @@ export default function LiveTrialPage() {
         </div>
 
         {/* Efficacy Summary */}
-        {efficacy.length > 0 && (
+        {show.showObservations && efficacy.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
             <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Efficacy Summary</h2>
             <div className="flex gap-3 mb-4">
@@ -195,7 +206,7 @@ export default function LiveTrialPage() {
         )}
 
         {/* AI Narrative */}
-        {aiData.narrative && (
+        {show.showAISummary && aiData.narrative && (
           <div className="bg-white rounded-2xl shadow-sm border border-violet-100 p-4">
             <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
               <span>🤖</span> AI Trial Narrative
@@ -210,7 +221,7 @@ export default function LiveTrialPage() {
         )}
 
         {/* Photos */}
-        {photos.length > 0 && (
+        {show.showPhotos && photos.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
             <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Field Photos</h2>
             <div className="grid grid-cols-2 gap-2">

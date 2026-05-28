@@ -2884,14 +2884,71 @@ Exactly 2 sentences. Follow this structure:
                       <p><span className="font-semibold text-slate-500">Replication:</span> {detailTrial?.Replication || '—'}</p>
                       <p className="mt-2 text-slate-400">Works without internet. Scan with Plot Scanner to open this trial.</p>
                     </div>
-                  ) : (
-                    <div className="w-full bg-blue-50 rounded-xl p-4 text-xs text-blue-800 border border-blue-200 space-y-2">
-                      <p className="font-bold text-blue-700 mb-1">🌐 Online / Live QR — links to:</p>
-                      <p className="font-mono break-all text-blue-600 bg-blue-100 rounded p-2">{liveUrl}</p>
-                      <p>Anyone with this QR can view live trial data (product, observations, photos, efficacy) directly from Firebase — no login required.</p>
-                      <p className="text-blue-500">Share this QR on field plot stakes, reports, or with stakeholders.</p>
-                    </div>
-                  )}
+                  ) : (() => {
+                    const LIVE_FIELDS = [
+                      { key: 'showFormulationName', label: 'Product Name' },
+                      { key: 'showInvestigatorName', label: 'Investigator' },
+                      { key: 'showDate', label: 'Application Date' },
+                      { key: 'showDosage', label: 'Dosage' },
+                      { key: 'showLocation', label: 'Location' },
+                      { key: 'showWeedSpecies', label: 'Target Weeds' },
+                      { key: 'showReplication', label: 'Replication' },
+                      { key: 'showResult', label: 'Result' },
+                      { key: 'showObservations', label: 'Observations / Efficacy' },
+                      { key: 'showPhotos', label: 'Field Photos' },
+                      { key: 'showAISummary', label: 'AI Narrative' },
+                    ];
+                    const defaultOn = LIVE_FIELDS.reduce((a, f) => ({ ...a, [f.key]: true }), {});
+                    const liveSettings = { ...defaultOn, ...safeJsonParse(detailTrial?.LiveQRSettings, {}) };
+
+                    const handleToggleLiveField = async (fieldKey) => {
+                      const updated = { ...liveSettings, [fieldKey]: !liveSettings[fieldKey] };
+                      const updatedTrial = { ...detailTrial, LiveQRSettings: JSON.stringify(updated) };
+                      // Optimistic UI update
+                      updateState({ trials: trials.map(t => t.ID === updatedTrial.ID ? updatedTrial : t) });
+                      setActiveTrial(updatedTrial);
+                      try {
+                        await updateTrial({ ID: updatedTrial.ID, LiveQRSettings: updatedTrial.LiveQRSettings }, getAppState);
+                      } catch (e) {
+                        window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: 'Could not save: ' + e.message, type: 'error' } }));
+                      }
+                    };
+
+                    return (
+                      <div className="w-full space-y-3">
+                        <div className="bg-blue-50 rounded-xl p-4 text-xs text-blue-800 border border-blue-200 space-y-2">
+                          <p className="font-bold text-blue-700 mb-1">🌐 Online / Live QR — links to:</p>
+                          <p className="font-mono break-all text-blue-600 bg-blue-100 rounded p-2">{liveUrl}</p>
+                          <p>Anyone with this QR can view live trial data directly from Firebase — no login required.</p>
+                        </div>
+                        <div className="w-full bg-white rounded-xl border border-slate-200 p-4">
+                          <p className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+                            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+                            Control what visitors see — changes save instantly to Firebase
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {LIVE_FIELDS.map(({ key, label }) => (
+                              <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+                                <div
+                                  onClick={() => handleToggleLiveField(key)}
+                                  className={`relative w-8 h-4 rounded-full transition-colors shrink-0 ${
+                                    liveSettings[key] ? 'bg-emerald-500' : 'bg-slate-300'
+                                  }`}
+                                >
+                                  <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+                                    liveSettings[key] ? 'translate-x-4' : 'translate-x-0'
+                                  }`} />
+                                </div>
+                                <span className={`text-xs ${liveSettings[key] ? 'text-slate-700 font-semibold' : 'text-slate-400 line-through'}`}>
+                                  {label}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 );
               })()}
