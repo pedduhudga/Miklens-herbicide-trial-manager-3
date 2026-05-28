@@ -2,32 +2,64 @@
 // Multi-provider AI photo analysis — ported from herbicide app 10 HTML
 
 
-// Provider order = priority order for fallback.
-// Free tier limits (Google AI Studio / Groq free plan) listed in comments.
+// Provider order = fallback priority (first = tried first).
+// Free tier limits per Google AI Studio / Groq free plan.
+// All Gemini models support: Text + Image + Video + Audio + PDF inputs.
 const PROVIDERS = [
+  // ── Gemini 3.x (newest generation, best vision quality) ──────────────────
   {
-    // Free: 30 RPM, 1500 RPD, 1M tokens/min — fastest & cheapest Gemini
+    // Stable | Free: ~1500 RPD, 30 RPM | Frontier-class, best for high-volume weed analysis
+    id: 'gemini-3-flash-lite',
+    name: 'Gemini 3.1 Flash-Lite',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent',
+    dailyLimit: 1500,
+  },
+  {
+    // Stable | Free: ~500 RPD, 15 RPM | Most intelligent Gemini 3, best for agentic weed ID
+    id: 'gemini-3-flash',
+    name: 'Gemini 3.5 Flash',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
+    dailyLimit: 500,
+  },
+  {
+    // Preview | Free: ~100 RPD, 5 RPM | Frontier preview, deeper reasoning for complex plots
+    id: 'gemini-3-flash-preview',
+    name: 'Gemini 3 Flash Preview',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent',
+    dailyLimit: 100,
+  },
+  {
+    // Preview | Free: ~25 RPD, 5 RPM | Most advanced reasoning — use for AI Summary/Reports
+    id: 'gemini-3-pro',
+    name: 'Gemini 3.1 Pro Preview',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent',
+    dailyLimit: 25,
+  },
+  // ── Gemini 2.5 (stable fallback series) ─────────────────────────────────
+  {
+    // Stable | Free: 1500 RPD, 30 RPM | Fast & cheap fallback
     id: 'gemini-flash-lite',
     name: 'Gemini 2.5 Flash-Lite',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent',
     dailyLimit: 1500,
   },
   {
-    // Free: 10 RPM, 250 RPD — best price/performance Gemini, supports vision + thinking
+    // Stable | Free: 250 RPD, 10 RPM | Reliable vision + thinking
     id: 'gemini-flash',
     name: 'Gemini 2.5 Flash',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
     dailyLimit: 250,
   },
   {
-    // Free: 5 RPM, 25 RPD — most capable Gemini, deep reasoning
+    // Stable | Free: 25 RPD, 5 RPM | Deep reasoning fallback
     id: 'gemini',
     name: 'Gemini 2.5 Pro',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent',
     dailyLimit: 25,
   },
+  // ── Groq (ultra-fast inference, vision support) ──────────────────────────
   {
-    // Groq Preview: ~500 RPD free — fast vision model, 5 images/request max
+    // Preview | Free: ~500 RPD | Best Groq vision model, 5 images/request
     id: 'groq-maverick',
     name: 'Groq LLaMA 4 Maverick',
     endpoint: 'https://api.groq.com/openai/v1/chat/completions',
@@ -35,15 +67,16 @@ const PROVIDERS = [
     dailyLimit: 500,
   },
   {
-    // Groq Preview: ~500 RPD free — lightweight fast vision
+    // Preview | Free: ~500 RPD | Lightweight fast vision
     id: 'groq',
     name: 'Groq LLaMA 4 Scout',
     endpoint: 'https://api.groq.com/openai/v1/chat/completions',
     model: 'meta-llama/llama-4-scout-17b-16e-instruct',
     dailyLimit: 500,
   },
+  // ── Mistral (last resort) ────────────────────────────────────────────────
   {
-    // Mistral: ~10 RPD on free tier — fallback only
+    // Free: ~50 RPD | Last resort fallback
     id: 'pixtral',
     name: 'Pixtral Large (Mistral)',
     endpoint: 'https://api.mistral.ai/v1/chat/completions',
