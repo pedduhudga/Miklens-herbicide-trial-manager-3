@@ -1547,11 +1547,20 @@ export default function Trials({ onMenuClick }) {
         return `  ${sp}: ${trajectory} | WCE ${spWce}% | Best suppression ${spMin}% at DAA${spMinDaa} | Final ${spFinal}%`;
       }).join('\n') || '  No per-species data recorded.';
 
-      const prompt = `You are a senior agronomist writing a professional herbicide field trial narrative for an official report.
+      // Format date as DD-Mon-YYYY for industry reports (e.g. 19-Apr-2026)
+      const fmtTrialDate = (() => {
+        try {
+          const d = new Date(detailTrial.Date);
+          if (isNaN(d)) return detailTrial.Date || 'N/A';
+          return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
+        } catch { return detailTrial.Date || 'N/A'; }
+      })();
+
+      const prompt = `You are a senior agronomist writing a professional herbicide field trial narrative for an official regulatory-style report (SOP/TDS validation standard).
 
 TRIAL DATA:
 - Product: ${detailTrial.FormulationName}
-- Application date: ${detailTrial.Date || 'N/A'}, Location: ${detailTrial.Location || 'N/A'}
+- Application date: ${fmtTrialDate}, Location: ${detailTrial.Location || 'N/A'}
 - Dosage: ${detailTrial.Dosage || 'N/A'}
 - Target weeds: ${detailTrial.WeedSpecies || 'Not specified'}
 - Control days tracked: ${controlDaysVal != null ? controlDaysVal + ' days' : 'Ongoing'}
@@ -1567,38 +1576,41 @@ PER-SPECIES BREAKDOWN:
 ${speciesAnalysis}
 
 HERBICIDE CONTROL DURATION BENCHMARKS (use these exact thresholds):
-- ≤7 days of effective suppression = Poor (unacceptable, product failed)
-- 8–17 days = Fair (marginal, short-residual, may need reapplication)
-- 18–27 days = Good (commercially acceptable for most situations)
-- 28+ days = Excellent (strong residual control, high-performance product)
+- ≤7 days of effective suppression = Poor
+- 8–17 days = Fair
+- 18–27 days = Good
+- 28+ days = Excellent
 - "Effective suppression" means cover stayed below 30% of initial level before significant regrowth.
 - If cover INCREASES at later DAAs after an initial drop, regrowth is occurring — note the regrowth DAA.
-- If cover never drops meaningfully (<20% reduction), the product had NO effective control on that species.
+- If cover never drops meaningfully (<20% reduction), the product had no measurable control on that species.
 
-STRICT FORMATTING RULES — follow exactly:
-1. Do NOT use any markdown (no **, no *, no #, no bullet dashes). Use plain text only.
-2. Section headings must be written as: "2. Overall Efficacy Trajectory" on its own line (number + title, no bold or symbols).
-3. Species sub-headings must be written as: "Common Name (Scientific Name)" on its own line before the description.
-4. Always write full common name + scientific name in parentheses for every species (e.g. "Bermuda Grass (Cynodon dactylon)").
-5. Do NOT include a Recommendation section.
-6. Write in third person, past tense for finalized trials, present tense for ongoing.
+LANGUAGE AND TONE RULES — follow strictly:
+1. Regulatory-neutral tone. Do NOT use aggressive or emotive language (avoid: "complete lack of efficacy", "product failed", "unacceptable"). Use neutral, factual phrasing instead (e.g. "inadequate weed control under the evaluated conditions", "no measurable suppression was observed", "no observable response attributable to the treatment").
+2. Do NOT speculate beyond observed data. Do not write "active growth and proliferation" unless biomass data supports it. Use cover % data only.
+3. Do NOT write "best or worst performance" comparisons — only state observed cover values objectively.
+4. Do NOT use any markdown formatting (no **, no *, no #, no bullet dashes, no hyphens as bullets). Plain text only.
+5. Section headings as: "1. Application & Setup" on its own line.
+6. Species sub-headings as: "Common Name (Scientific Name)" on its own line, then the paragraph. Do NOT repeat the species name inside the paragraph if it was just stated in the heading.
+7. Application date must be formatted as DD-Mon-YYYY (e.g. 19-Apr-2026). Dosage units: write "mL" not "ml".
+8. Write in third person. Past tense for finalized trials, present tense for ongoing.
+9. Do NOT include a Recommendation or Conclusion section.
 
-OUTPUT STRUCTURE — write exactly these 4 sections:
+OUTPUT STRUCTURE — write exactly these 4 sections, nothing else:
 
 1. Application & Setup
-One sentence: product name, dosage, application date, location, and target weed species (with scientific names).
+One sentence: product name, dosage (with proper units), application date (DD-Mon-YYYY), location, and all target weed species with scientific names in parentheses.
 
 2. Overall Efficacy Trajectory
-2-3 sentences describing the total cover trend across ALL observation points. Note: any knockdown phase, when minimum cover was achieved, whether cover increased again (regrowth), and at which DAA.
+2-3 sentences. Describe total cover at each recorded DAA. State whether any knockdown symptoms or suppression effects were observed. If cover increased, state it factually (e.g. "Total weed cover increased from X% at DAA 0 to Y% at DAA Z, indicating inadequate weed control under the evaluated conditions."). Do not over-interpret.
 
 3. Species-wise Performance
-For EACH species in the per-species breakdown, write the species heading then 1-2 sentences:
-- If no control: state cover at each observed DAA and note no observable reduction.
-- If partial or good control: state cover trajectory, at which DAA minimum was reached, and how long suppression lasted.
-- End with one sentence summarising which species showed the best and worst response overall.
+For EACH species in the per-species breakdown — write the species heading, then 1-2 sentences:
+- State cover at each observed DAA factually.
+- Use: "no measurable suppression", "no observable reduction", "no significant reduction attributable to the treatment", or "limited to no observable control" as appropriate.
+- Close with ONE neutral summary sentence about overall species-level WCE (e.g. "Overall, all evaluated species demonstrated negligible Weed Control Efficacy (WCE) under the tested field conditions.").
 
 4. Control Duration Interpretation
-1-2 sentences: rate the treatment as Poor / Fair / Good / Excellent based on the benchmarks. Explain the rating using actual DAA numbers and cover values. Be honest — do not soften poor results.`;
+1-2 sentences only. Rate as Poor / Fair / Good / Excellent using the benchmarks. State the observed DAA range and cover values as evidence. Use neutral language (e.g. "Treatment performance was classified as Poor, as no sustained suppression or reduction in weed cover was achieved throughout the X-day observation period.").`;
 
 
       // Use first available Gemini model (try 2.5-flash as reliable stable model)
