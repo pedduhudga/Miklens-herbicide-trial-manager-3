@@ -2,32 +2,53 @@
 // Multi-provider AI photo analysis — ported from herbicide app 10 HTML
 
 
+// Provider order = priority order for fallback.
+// Free tier limits (Google AI Studio / Groq free plan) listed in comments.
 const PROVIDERS = [
   {
+    // Free: 30 RPM, 1500 RPD, 1M tokens/min — fastest & cheapest Gemini
+    id: 'gemini-flash-lite',
+    name: 'Gemini 2.5 Flash-Lite',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent',
+    dailyLimit: 1500,
+  },
+  {
+    // Free: 10 RPM, 250 RPD — best price/performance Gemini, supports vision + thinking
+    id: 'gemini-flash',
+    name: 'Gemini 2.5 Flash',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+    dailyLimit: 250,
+  },
+  {
+    // Free: 5 RPM, 25 RPD — most capable Gemini, deep reasoning
+    id: 'gemini',
+    name: 'Gemini 2.5 Pro',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent',
+    dailyLimit: 25,
+  },
+  {
+    // Groq Preview: ~500 RPD free — fast vision model, 5 images/request max
+    id: 'groq-maverick',
+    name: 'Groq LLaMA 4 Maverick',
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+    dailyLimit: 500,
+  },
+  {
+    // Groq Preview: ~500 RPD free — lightweight fast vision
     id: 'groq',
     name: 'Groq LLaMA 4 Scout',
     endpoint: 'https://api.groq.com/openai/v1/chat/completions',
     model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    dailyLimit: 1000,
+    dailyLimit: 500,
   },
   {
-    id: 'gemini-flash',
-    name: 'Gemini 3.5 Flash',
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
-    dailyLimit: 1000,
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini 3.1 Pro',
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro:generateContent',
-    dailyLimit: 25,
-  },
-  {
+    // Mistral: ~10 RPD on free tier — fallback only
     id: 'pixtral',
-    name: 'Pixtral (Mistral)',
+    name: 'Pixtral Large (Mistral)',
     endpoint: 'https://api.mistral.ai/v1/chat/completions',
-    model: 'pixtral-12b-2409',
-    dailyLimit: 10000,
+    model: 'pixtral-large-2411',
+    dailyLimit: 50,
   },
 ];
 
@@ -40,23 +61,24 @@ function getSettings() {
 
 function getAPIKeys(providerId) {
   const settings = getSettings();
-  const baseId = providerId === 'gemini-flash' ? 'gemini' : providerId;
+  const isGemini = providerId.startsWith('gemini');
+  const isGroq = providerId === 'groq' || providerId === 'groq-maverick';
+  const baseId = isGemini ? 'gemini' : isGroq ? 'groq' : providerId;
 
   const keys = [];
 
-  // Check settings object for various key field names
   const settingsKeys = [
     settings?.apiKeys,
     settings?.geminiApiKeys,
     settings?.geminiApiKey ? [settings.geminiApiKey] : null,
   ];
-  if (baseId === 'gemini' || baseId === 'gemini-flash') {
+  if (isGemini) {
     settingsKeys.forEach(k => {
       if (Array.isArray(k)) keys.push(...k.filter(Boolean));
       else if (typeof k === 'string' && k.trim()) keys.push(k.trim());
     });
   }
-  if (baseId === 'groq' && settings?.groqApiKey) keys.push(settings.groqApiKey);
+  if (isGroq && settings?.groqApiKey) keys.push(settings.groqApiKey);
   if (baseId === 'pixtral' && settings?.mistralApiKey) keys.push(settings.mistralApiKey);
 
   // Also check localStorage directly
@@ -250,8 +272,8 @@ async function callPixtral(provider, imageData, context, apiKey) {
 }
 
 async function callProvider(provider, imageData, context, apiKey) {
-  if (provider.id === 'groq') return callGroq(provider, imageData, context, apiKey);
-  if (provider.id === 'gemini' || provider.id === 'gemini-flash') return callGemini(provider, imageData, context, apiKey);
+  if (provider.id === 'groq' || provider.id === 'groq-maverick') return callGroq(provider, imageData, context, apiKey);
+  if (provider.id.startsWith('gemini')) return callGemini(provider, imageData, context, apiKey);
   if (provider.id === 'pixtral') return callPixtral(provider, imageData, context, apiKey);
   throw new Error(`Unknown provider: ${provider.id}`);
 }
