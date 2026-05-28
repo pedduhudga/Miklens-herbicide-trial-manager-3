@@ -868,12 +868,9 @@ export default function Trials({ onMenuClick }) {
       ? aiData.totalWeedCover
       : normalizedWeeds.reduce((sum, w) => sum + (w.cover || 0), 0);
 
-    // Build comprehensive notes
+    // Build observation notes — factual only, no recommendations or projections
     const aiNotes = [];
-    if (aiData.efficacyAssessment) aiNotes.push(`Efficacy: ${aiData.efficacyAssessment}`);
-    if (aiData.competitionLevel) aiNotes.push(`Weed Pressure: ${aiData.competitionLevel}`);
-    if (aiData.dominantSpecies) aiNotes.push(`Dominant: ${aiData.dominantSpecies}`);
-    if (aiData.recommendations) aiNotes.push(`Recommendation: ${aiData.recommendations}`);
+    if (aiData.efficacyAssessment) aiNotes.push(aiData.efficacyAssessment);
     if (aiData.notes) aiNotes.push(aiData.notes);
 
     const newObs = {

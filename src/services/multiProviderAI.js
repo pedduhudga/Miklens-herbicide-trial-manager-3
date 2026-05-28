@@ -162,36 +162,41 @@ PLOT INFORMATION:
 ${historyNote}
 
 SCIENTIFIC ANALYSIS TASKS:
-1. **Weed Species Identification**: Identify all visible weed species using common names. Be specific (e.g., "Barnyard Grass/Echinochloa crus-galli", "Horse Purslane/Trianthema portulacastrum").
+1. **Weed Species Identification**: Identify all visible weed species. Write each species as "Common Name (Scientific name)" — Genus capitalised, species lowercase (e.g. "Barnyard Grass (Echinochloa crus-galli)", "Horse Purslane (Trianthema portulacastrum)").
 
-2. **Ground Cover Estimation**: For each species, estimate percentage ground cover (0-100%). Sum should approximate total weed pressure.
+2. **Ground Cover Estimation**: For each species, estimate percentage ground cover (0-100%). Sum should approximate total weed cover.
 
-3. **Phytotoxicity Assessment**: Classify herbicide response for each weed:
-   - "Healthy" - No visible herbicide effect
-   - "Slight Injury" - Minor leaf spotting/curling
-   - "Moderate Injury" - Significant chlorosis/necrosis
-   - "Severe Injury" - Heavy necrosis, stunted
-   - "Dead/Desiccated" - Brown/dry, no green tissue
-   - "Burndown" - Rapid wilting/browning (contact effect)
+3. **Herbicidal Injury Response**: Classify the observed treatment response for each weed using ONLY these terms:
+   - "Unaffected" - No visible herbicidal injury
+   - "Slight Injury" - Minor leaf spotting or marginal necrosis
+   - "Moderate Injury" - Significant tissue damage, partial wilting
+   - "Severe Injury" - Extensive tissue damage, stunted growth
+   - "Dead/Desiccated" - Brown/dry, no green tissue remaining
+   - "Burndown" - Rapid wilting or browning (contact herbicide effect)
 
-4. **Growth Stage**: Note stage (Seedling, Vegetative, Flowering, Mature)
+4. **Growth Stage**: Record stage as one of: Seedling, Vegetative, Flowering, Mature
 
-5. **Competition Level**: Classify overall pressure (None, Low, Moderate, High, Severe)
+5. **Infestation Level**: Classify overall weed pressure as: None, Low, Moderate, High, or Severe
 
-6. **Confidence**: Rate as LOW, MEDIUM, or HIGH
+6. **Confidence**: Rate image assessment confidence as LOW, MEDIUM, or HIGH
 
-OUTPUT FORMAT - JSON ONLY:
+LANGUAGE RULES:
+- Do NOT include any recommendations, monitoring suggestions, or next-step advice.
+- Do NOT use the words "phytotoxic" or "phytotoxicity".
+- The "efficacyAssessment" field must state only what is OBSERVED in this photo at this DAA — no projections or post-application schedules.
+- Keep all notes factual and observation-based only.
+
+OUTPUT FORMAT - JSON ONLY (no extra text):
 {
   "weeds": [
-    {"species": "Common Name", "cover": 25, "status": "Dead/Desiccated", "growthStage": "Vegetative", "notes": "Complete browning, no regrowth"}
+    {"species": "Common Name (Scientific name)", "cover": 25, "status": "Unaffected", "growthStage": "Vegetative", "notes": "Dense stand, no visible injury observed"}
   ],
   "totalWeedCover": 45,
-  "competitionLevel": "Moderate",
-  "dominantSpecies": "Primary species",
+  "infestationLevel": "Moderate",
+  "dominantSpecies": "Primary species name",
   "confidence": "HIGH",
-  "efficacyAssessment": "Good control, ~80% reduction",
-  "notes": "Clear photo. Some regrowth in corners.",
-  "recommendations": "Continue monitoring for late-emerging weeds"
+  "efficacyAssessment": "No herbicidal injury observed at DAA 0; baseline assessment.",
+  "notes": "Photo quality clear. Mixed infestation noted."
 }`;
 }
 
