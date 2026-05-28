@@ -1167,117 +1167,104 @@ export default function Trials({ onMenuClick }) {
       return;
     }
 
+    // Build live URLs for each trial (scannable by any phone — no app needed)
+    const appBase = window.location.origin + window.location.pathname;
+    const trialUrls = {};
+    selectedTrials.forEach(t => {
+      trialUrls[t.ID] = `${appBase}#/live/${t.ID}`;
+    });
+
+    const fmtD = (d) => { try { return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); } catch { return d || ''; } };
+
     const cardsHtml = selectedTrials.map(trial => {
-      const qrData = JSON.stringify({
-        trialId: trial.ID,
-        name: trial.FormulationName,
-        location: trial.Location,
-        date: trial.Date,
-        investigator: trial.InvestigatorName
-      });
       return `
         <div class="qr-card" style="
           width: ${config.width};
-          height: ${config.height};
+          min-height: ${config.height};
           border: 2px solid #0d9488;
           border-radius: 12px;
-          padding: 12px;
+          padding: 14px 12px;
           margin: 8px;
           display: flex;
           flex-direction: column;
           align-items: center;
-          justify-content: center;
+          justify-content: space-between;
           background: white;
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
           page-break-inside: avoid;
+          box-sizing: border-box;
         ">
-          <div style="font-size: ${config.fontSize}; font-weight: bold; color: #0d9488; margin-bottom: 6px; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          <div style="font-size: ${config.fontSize}; font-weight: 800; color: #0d9488; text-align: center; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 6px;">
             ${trial.FormulationName || 'Trial'}
           </div>
-          <div id="qr-${trial.ID}" style="margin: 4px 0;"></div>
-          <div style="font-size: ${config.fontSize}; color: #64748b; text-align: center; line-height: 1.3;">
-            <div>${trial.Location || 'No location'}</div>
-            <div>${trial.Date ? new Date(trial.Date).toLocaleDateString() : ''}</div>
-            <div style="font-size: 9px; color: #94a3b8; margin-top: 4px;">ID: ${trial.ID.slice(-8)}</div>
+          <canvas id="qr-${trial.ID}" style="display:block; margin: 4px auto;"></canvas>
+          <div style="font-size: calc(${config.fontSize} - 1px); color: #475569; text-align: center; line-height: 1.5; margin-top: 6px; width: 100%;">
+            ${trial.InvestigatorName ? `<div><b>Inv:</b> ${trial.InvestigatorName}</div>` : ''}
+            ${trial.Location ? `<div><b>Loc:</b> ${trial.Location}</div>` : ''}
+            ${trial.Date ? `<div><b>Date:</b> ${fmtD(trial.Date)}</div>` : ''}
+            ${trial.Dosage ? `<div><b>Dose:</b> ${trial.Dosage}</div>` : ''}
+            ${trial.WeedSpecies ? `<div style="font-size:9px; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;"><b>Weeds:</b> ${trial.WeedSpecies}</div>` : ''}
+            <div style="font-size: 8px; color: #94a3b8; margin-top: 5px; font-family: monospace;">ID: ${trial.ID.slice(-10)}</div>
           </div>
         </div>
       `;
     }).join('');
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>QR Trial Cards</title>
-          <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-          <style>
-            @media print {
-              body { margin: 0; padding: 0; }
-              .no-print { display: none; }
-              .qr-card { break-inside: avoid; }
-            }
-            body {
-              font-family: system-ui, -apple-system, sans-serif;
-              background: #f8fafc;
-              margin: 0;
-              padding: 20px;
-            }
-            .controls {
-              text-align: center;
-              padding: 20px;
-              background: white;
-              border-radius: 12px;
-              margin-bottom: 20px;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
-            .print-btn {
-              background: #0d9488;
-              color: white;
-              border: none;
-              padding: 12px 24px;
-              border-radius: 8px;
-              font-size: 16px;
-              cursor: pointer;
-            }
-            .print-btn:hover { background: #0f766e; }
-            .cards-container {
-              display: flex;
-              flex-wrap: wrap;
-              justify-content: center;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="controls no-print">
-            <h2>QR Trial Cards (${selectedTrials.length} cards)</h2>
-            <p>Size: ${qrCardSize.toUpperCase()} | Cards will print on separate pages</p>
-            <button class="print-btn" onclick="window.print()">Print Cards</button>
-          </div>
-          <div class="cards-container">
-            ${cardsHtml}
-          </div>
-          <script>
-            window.onload = function() {
-              ${selectedTrials.map(t => `
-                new QRCode(document.getElementById('qr-${t.ID}'), {
-                  text: '${JSON.stringify({
-                    trialId: t.ID,
-                    name: t.FormulationName,
-                    location: t.Location,
-                    date: t.Date
-                  }).replace(/'/g, "\\'")}',
-                  width: ${config.qrSize},
-                  height: ${config.qrSize},
-                  colorDark: '#0d9488',
-                  colorLight: '#ffffff',
-                  correctLevel: QRCode.CorrectLevel.M
-                });
-              `).join('')}
-            };
-          </script>
-        </body>
-      </html>
-    `);
+    // Serialize trial URLs as a JSON map for the inline script
+    const urlMapJson = JSON.stringify(trialUrls).replace(/<\/script>/gi, '<\\/script>');
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>QR Trial Cards</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"><\/script>
+  <style>
+    @media print {
+      body { margin: 0; padding: 0; }
+      .no-print { display: none !important; }
+      .qr-card { break-inside: avoid; }
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
+    .controls { text-align: center; padding: 20px; background: white; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .print-btn { background: #0d9488; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+    .print-btn:hover { background: #0f766e; }
+    .cards-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  </style>
+</head>
+<body>
+  <div class="controls no-print">
+    <h2 style="margin:0 0 8px;">QR Trial Cards &mdash; ${selectedTrials.length} card${selectedTrials.length > 1 ? 's' : ''}</h2>
+    <p style="margin:0 0 12px; color:#64748b;">Size: ${qrCardSize.toUpperCase()} &bull; Each QR links to the live trial page</p>
+    <button class="print-btn" onclick="window.print()">🖨 Print Cards</button>
+  </div>
+  <div class="cards-container">
+    ${cardsHtml}
+  </div>
+  <script>
+    var urlMap = ${urlMapJson};
+    function generateAll() {
+      var ids = Object.keys(urlMap);
+      ids.forEach(function(id) {
+        var canvas = document.getElementById('qr-' + id);
+        if (!canvas) return;
+        QRCode.toCanvas(canvas, urlMap[id], {
+          width: ${config.qrSize},
+          margin: 1,
+          color: { dark: '#0d9488', light: '#ffffff' },
+          errorCorrectionLevel: 'H'
+        }, function(err) { if (err) console.error('QR error for', id, err); });
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', generateAll);
+    } else {
+      generateAll();
+    }
+  <\/script>
+</body>
+</html>`);
     printWindow.document.close();
   };
 

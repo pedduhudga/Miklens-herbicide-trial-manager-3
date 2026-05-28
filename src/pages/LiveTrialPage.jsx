@@ -29,18 +29,32 @@ export default function LiveTrialPage() {
   useEffect(() => {
     if (!id) { setError('No trial ID in URL.'); setLoading(false); return; }
 
-    // Try to load Firebase config from localStorage (set during app setup)
+    // 1. Try Vite env vars baked in at build time (works for any visitor)
     let firebaseConfig = null;
-    try {
-      const saved = localStorage.getItem('appSettings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.firebaseConfig?.apiKey) firebaseConfig = parsed.firebaseConfig;
-      }
-    } catch { /* ignore */ }
+    if (import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.VITE_FIREBASE_PROJECT_ID) {
+      firebaseConfig = {
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+        appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      };
+    }
+
+    // 2. Fall back to localStorage (works when opened on the same device as the app)
+    if (!firebaseConfig) {
+      try {
+        const saved = localStorage.getItem('appSettings');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.firebaseConfig?.apiKey) firebaseConfig = parsed.firebaseConfig;
+        }
+      } catch { /* ignore */ }
+    }
 
     if (!firebaseConfig) {
-      setError('Firebase not configured. Open the app, complete setup, then re-scan this QR.');
+      setError('Firebase is not configured for public access. Ask the app administrator to set VITE_FIREBASE_* environment variables in Vercel.');
       setLoading(false);
       return;
     }
