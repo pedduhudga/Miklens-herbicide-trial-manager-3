@@ -1508,21 +1508,76 @@ export default function Trials({ onMenuClick }) {
     setAiSummary('');
     try {
       const efficacy = validateEfficacyData(safeJsonParse(detailTrial.EfficacyDataJSON, []));
-      const obsSummary = efficacy.map(o => `DAA ${o.daa}: ${o.weedCover}% cover`).join(', ');
-      const prompt = `Summarize this herbicide trial result in 3-4 sentences for an agronomist report.
-Trial: ${detailTrial.FormulationName}
-Date: ${detailTrial.Date}, Location: ${detailTrial.Location || 'N/A'}
-Dosage: ${detailTrial.Dosage || 'N/A'}
-Weed species: ${detailTrial.WeedSpecies || 'N/A'}
-Observations: ${obsSummary || 'No data'}
-Overall result: ${detailTrial.Result || 'Not rated'}
-Conclusion: ${detailTrial.Conclusion || ''}
-Write a professional, concise narrative summary.`;
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+      const sorted = [...efficacy].sort((a, b) => (a.daa ?? 0) - (b.daa ?? 0));
+
+      // Build a rich observation timeline for the AI
+      const obsLines = sorted.map(o => {
+        const speciesLine = (o.weedDetails || []).map(w => `${w.species}: ${w.cover}%`).join(', ');
+        return `  DAA ${o.daa}: total cover ${o.weedCover ?? '?'}%${speciesLine ? ` (${speciesLine})` : ''}${o.notes ? ` — ${o.notes}` : ''}`;
+      }).join('\n');
+
+      // Compute key metrics to feed the AI
+      const baseline = sorted[0];
+      const latest = sorted[sorted.length - 1];
+      const baseCover = parseFloat(baseline?.weedCover ?? 0) || 0;
+      const finalCover = parseFloat(latest?.weedCover ?? 0) || 0;
+      const wce = baseCover > 0 ? Math.max(0, ((baseCover - finalCover) / baseCover) * 100) : 0;
+      const minObs = sorted.reduce((m, o) => (o.weedCover ?? 100) < (m.weedCover ?? 100) ? o : m, sorted[0] ?? {});
+      const controlDaysVal = detailTrial.FinalControlDuration
+        ? parseInt(detailTrial.FinalControlDuration, 10)
+        : (detailTrial.Date ? Math.max(0, Math.round((new Date() - new Date(detailTrial.Date)) / 86400000)) : null);
+
+      const prompt = `You are a senior agronomist writing a professional trial narrative for a herbicide field trial report.
+
+TRIAL DATA:
+- Product: ${detailTrial.FormulationName}
+- Application date: ${detailTrial.Date || 'N/A'}, Location: ${detailTrial.Location || 'N/A'}
+- Dosage: ${detailTrial.Dosage || 'N/A'}
+- Target weeds: ${detailTrial.WeedSpecies || 'Not specified'}
+- Control days tracked: ${controlDaysVal != null ? controlDaysVal + ' days' : 'Not finalized'}
+- Trial status: ${(detailTrial.IsCompleted === true || detailTrial.IsCompleted === 'true') ? 'Completed/Finalized' : 'Ongoing'}
+- Rated result: ${detailTrial.Result || 'Not yet rated'}
+- Weed Control Efficiency (WCE): ${wce.toFixed(1)}% (initial ${baseCover}% → final ${finalCover}%)
+- Minimum cover achieved: ${minObs.weedCover ?? '?'}% at DAA ${minObs.daa ?? '?'}
+
+OBSERVATION TIMELINE (Days After Application → weed cover %):
+${obsLines || '  No observations recorded yet.'}
+
+INDUSTRY CONTEXT:
+- In herbicide trials, ≥85% WCE over 30+ days = Excellent control, 70-84% = Good, 50-69% = Fair, <50% = Poor.
+- Control lasting 30+ days is commercially effective; 60+ days is high-performance; 90+ days is exceptional.
+- If cover increases at later DAAs, regrowth or re-infestation is occurring.
+- A product that achieves <50% WCE or shows major regrowth by 30 DAA is considered inadequate.
+
+TASK: Write a 4-6 sentence professional agronomic narrative that:
+1. States what was applied, where, and against which weeds.
+2. Describes the weed control trajectory across ALL observation points (not just first and last) — note any knockdown phase, minimum cover point, and any regrowth trend.
+3. Interprets the control duration in industry terms (e.g. "provided 45 days of effective control before regrowth" or "maintained suppression beyond 60 DAA").
+4. Gives an honest agronomic conclusion — if control is poor after 30+ days, say so explicitly; if excellent, confirm it.
+5. Makes a brief practical recommendation (continue, adjust rate, consider tank-mix, etc.).
+
+Do NOT just restate the raw numbers — interpret what they mean agronomically. Write in third person, past tense for completed trials.`;
+
+      // Use first available Gemini model (try 2.5-flash as reliable stable model)
+      const model = 'gemini-2.5-flash';
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
       });
+      if (!res.ok) {
+        // Fallback to gemini-2.5-flash-lite if primary fails
+        const fallbackRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        const fallbackData = await fallbackRes.json();
+        const fallbackText = fallbackData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (!fallbackText) throw new Error('Empty AI response from fallback model');
+        setAiSummary(fallbackText);
+        return;
+      }
       const data = await res.json();
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       if (!text) throw new Error('Empty AI response');
