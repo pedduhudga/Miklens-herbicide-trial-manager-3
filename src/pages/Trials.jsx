@@ -858,7 +858,8 @@ export default function Trials({ onMenuClick }) {
   };
 
   const handleAnalyzeSinglePhoto = async (photoSrc, photoDate) => {
-    if (!activeTrial) return;
+    if (!activeTrial || aiGenRunning) return;
+    setAiGenRunning(true);
     const trialDate = new Date(activeTrial.Date);
     let daa = 0;
     if (photoDate) {
@@ -867,18 +868,24 @@ export default function Trials({ onMenuClick }) {
       daa = daa >= 0 ? daa : 0;
     }
 
-    window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: 'Analyzing photo with AI...', type: 'info' } }));
-    const result = await analyzePhoto(photoSrc, {
-      treatment: activeTrial.FormulationName,
-      daa,
-      rep: activeTrial.Replication || 1
-    });
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: `Analyzing photo with AI (DAA ${daa})...`, type: 'info' } }));
+    try {
+      const result = await analyzePhoto(photoSrc, {
+        treatment: activeTrial.FormulationName,
+        daa,
+        rep: activeTrial.Replication || 1
+      }, (msg) => window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg, type: 'info' } })));
 
-    if (result.success) {
-      await createObservationFromAI(activeTrial, daa, result.data);
-      window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: `AI analysis complete! Detected ${result.data.weeds?.length || 0} weed species.`, type: 'success' } }));
-    } else {
-      window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: 'AI analysis failed: ' + result.error, type: 'error' } }));
+      if (result.success) {
+        await createObservationFromAI(activeTrial, daa, result.data);
+        window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: `AI complete! Detected ${result.data.weeds?.length || 0} weed species at DAA ${daa}. Observation saved.`, type: 'success' } }));
+      } else {
+        window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: 'AI analysis failed: ' + (result.error || 'Unknown error'), type: 'error' } }));
+      }
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: 'AI analysis error: ' + e.message, type: 'error' } }));
+    } finally {
+      setAiGenRunning(false);
     }
   };
 
@@ -2095,9 +2102,12 @@ Write a professional, concise narrative summary.`;
                                 onError={e => { e.target.onerror = null; e.target.src = rawSrc; }}
                               />
                               <div className="absolute top-1 right-1 flex gap-1">
-                                <button onClick={() => handleAnalyzeSinglePhoto(rawSrc, photo.date)} title="AI Full Scan & Log"
-                                  className="p-1.5 bg-purple-600/90 backdrop-blur rounded-lg text-white shadow">
-                                  <Sparkles className="w-3 h-3" />
+                                <button
+                                  onClick={() => handleAnalyzeSinglePhoto(rawSrc, photo.date)}
+                                  disabled={aiGenRunning}
+                                  title={aiGenRunning ? 'AI analysis running...' : 'AI Full Scan & Log'}
+                                  className={`p-1.5 rounded-lg text-white shadow transition ${aiGenRunning ? 'bg-purple-400 cursor-wait' : 'bg-purple-600/90 hover:bg-purple-700'}`}>
+                                  {aiGenRunning ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                                 </button>
                                 <button onClick={() => handleDeletePhoto(idx)} title="Delete"
                                   className="p-1.5 bg-red-500/90 backdrop-blur rounded-lg text-white shadow">
