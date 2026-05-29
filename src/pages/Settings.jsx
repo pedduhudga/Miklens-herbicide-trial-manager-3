@@ -3,7 +3,10 @@ import TopBar from "../components/TopBar.jsx";
 import { useAppState } from "../hooks/useAppState.jsx";
 import { useAuth } from "../hooks/useAuth.js";
 import { initFirebase, isFirebaseReady } from "../services/firebase.js";
-import { fbSaveUserSettings } from "../services/firebaseDB.js";
+import {
+  fbSaveUserSettings,
+  fbSaveGlobalQRSettings,
+} from "../services/firebaseDB.js";
 import { apiCall } from "../services/dataLayer.js";
 import {
   Link,
@@ -266,6 +269,11 @@ export default function Settings({ onMenuClick }) {
           const uid = state.auth?.uid || user?.uid;
           if (uid && isFirebaseReady()) {
             await fbSaveUserSettings(uid, settingsToPersist);
+          }
+          // Save global QR settings to Firestore so that LiveTrialPage
+          // can read them on any device without localStorage access.
+          if (isFirebaseReady()) {
+            await fbSaveGlobalQRSettings(qrOnlineFields);
           }
         } catch (firebaseErr) {
           console.warn("Firebase settings sync failed:", firebaseErr);
