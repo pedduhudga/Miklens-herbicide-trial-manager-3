@@ -3,10 +3,35 @@ import TopBar from '../components/TopBar.jsx';
 import { useAppState } from '../hooks/useAppState.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 import { initFirebase, isFirebaseReady } from '../services/firebase.js';
+import { apiCall } from '../services/dataLayer.js';
 import { Link, Key, CloudLightning, Trash2, CheckCircle, Plus, LogOut, Cpu, Info, Image, QrCode, Wrench, Save, LayoutGrid, Search, Flame, Database, ToggleLeft, ToggleRight, AlertTriangle, ArrowRight } from 'lucide-react';
 import { AVAILABLE_GEMINI_MODELS } from '../utils/aiConstants.js';
 
 const QR_FIELDS = ['FormulationName', 'Dosage', 'WeedSpecies', 'Location', 'Date', 'Result', 'InvestigatorName', 'Replication', 'Notes', 'Temperature', 'Humidity'];
+const ONLINE_QR_FIELDS = [
+  { key: 'showInvestigator', label: 'Investigator' },
+  { key: 'showDate', label: 'Date' },
+  { key: 'showLocation', label: 'Location' },
+  { key: 'showDosage', label: 'Dosage' },
+  { key: 'showWeedSpecies', label: 'Weed Species' },
+  { key: 'showResult', label: 'Result' },
+  { key: 'showWeather', label: 'Weather' },
+  { key: 'showIngredients', label: 'Ingredients' },
+  { key: 'showConclusion', label: 'Conclusion & Notes' },
+  { key: 'showPhotos', label: 'Photos' },
+];
+const DEFAULT_ONLINE_QR_SETTINGS = {
+  showInvestigator: true,
+  showDate: true,
+  showLocation: true,
+  showDosage: true,
+  showWeedSpecies: true,
+  showResult: true,
+  showWeather: true,
+  showIngredients: false,
+  showConclusion: true,
+  showPhotos: true,
+};
 
 
 export default function Settings({ onMenuClick }) {
@@ -101,18 +126,62 @@ export default function Settings({ onMenuClick }) {
 
   // ── QR field toggles ─────────────────────────────────────────────────────
   const parseArr = (val, def) => Array.isArray(val) ? val : (typeof val === 'string' ? (() => { try { const p = JSON.parse(val); return Array.isArray(p) ? p : def; } catch { return def; } })() : def);
+  const parseOnlineQrSettings = (val) => {
+    if (Array.isArray(val)) {
+      return {
+        ...DEFAULT_ONLINE_QR_SETTINGS,
+        showInvestigator: val.includes('InvestigatorName'),
+        showDate: val.includes('Date'),
+        showLocation: val.includes('Location'),
+        showDosage: val.includes('Dosage'),
+        showWeedSpecies: val.includes('WeedSpecies'),
+        showResult: val.includes('Result'),
+        showWeather: val.includes('Temperature') || val.includes('Humidity') || val.includes('Weather'),
+        showConclusion: val.includes('Notes') || val.includes('Conclusion'),
+        showPhotos: val.includes('Photos'),
+      };
+    }
+    if (typeof val === 'string') {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) return parseOnlineQrSettings(parsed);
+        if (parsed && typeof parsed === 'object') return { ...DEFAULT_ONLINE_QR_SETTINGS, ...parsed };
+      } catch {
+        return { ...DEFAULT_ONLINE_QR_SETTINGS };
+      }
+    }
+    if (val && typeof val === 'object') return { ...DEFAULT_ONLINE_QR_SETTINGS, ...val };
+    return { ...DEFAULT_ONLINE_QR_SETTINGS };
+  };
   const qrOfflineFields = parseArr(s.qrOfflineFields, ['FormulationName', 'Dosage', 'WeedSpecies', 'Date']);
-  const qrOnlineFields  = parseArr(s.qrOnlineFields,  ['FormulationName', 'Dosage', 'WeedSpecies', 'Location', 'Date', 'Result']);
+  const qrOnlineFields = parseOnlineQrSettings(s.qrOnlineFields);
 
   const toggleQrField = (mode, field) => {
-    const key = mode === 'offline' ? 'qrOfflineFields' : 'qrOnlineFields';
-    const current = mode === 'offline' ? qrOfflineFields : qrOnlineFields;
-    const updated = current.includes(field) ? current.filter(f => f !== field) : [...current, field];
-    updateSettings({ [key]: updated });
+    if (mode === 'offline') {
+      const updated = qrOfflineFields.includes(field) ? qrOfflineFields.filter(f => f !== field) : [...qrOfflineFields, field];
+      updateSettings({ qrOfflineFields: updated });
+      return;
+    }
+    updateSettings({ qrOnlineFields: { ...qrOnlineFields, [field]: !qrOnlineFields[field] } });
   };
 
   // ── Save / Logout ─────────────────────────────────────────────────────────
-  const handleSave = () => toast('Settings saved');
+  const handleSave = async () => {
+    try {
+      const settingsForScript = {
+        ...s,
+        qrOnlineFields,
+      };
+      const result = await apiCall('saveAllSettings', { settings: settingsForScript }, false, () => state);
+      if (result?._errType) {
+        toast(`Local settings saved, but script sync failed: ${result.message}`, 'warning');
+      } else {
+        toast('Settings saved');
+      }
+    } catch (err) {
+      toast(`Local settings saved, but script sync failed: ${err.message}`, 'warning');
+    }
+  };
   const handleLogout = () => { if (window.confirm('Log out of this account?')) logout(); };
   const handleClearCacheReload = () => {
     if (!window.confirm('Clear all cached data and reload the app?')) return;
@@ -604,14 +673,14 @@ export default function Settings({ onMenuClick }) {
           <h2 className="text-xl font-semibold text-gray-700 mb-1 flex items-center gap-2">
             <QrCode className="w-5 h-5 text-gray-500" /> Global QR Content (Online Mode)
           </h2>
-          <p className="text-sm text-gray-600 mb-4">Default settings for what shows up when a QR code is scanned in online mode.</p>
+          <p className="text-sm text-gray-600 mb-4">Default settings for what shows up when a QR code is scanned in online mode through the Google Apps Script web app.</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            {QR_FIELDS.map(f => (
-              <label key={f} className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={qrOnlineFields.includes(f)}
-                  onChange={() => toggleQrField('online', f)}
+            {ONLINE_QR_FIELDS.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!qrOnlineFields[key]}
+                  onChange={() => toggleQrField('online', key)}
                   className="h-4 w-4 rounded border-gray-300 text-emerald-600" />
-                {f}
+                {label}
               </label>
             ))}
           </div>
