@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAppState } from '../hooks/useAppState.jsx';
 import TopBar from '../components/TopBar.jsx';
-import { Sparkles, SendHorizontal, Trash2, Copy, Check, Paperclip, X, Mic, MicOff, Image } from 'lucide-react';
+import { Sparkles, SendHorizontal, Trash2, Copy, Check, Paperclip, X, Mic, MicOff, Image, Search } from 'lucide-react';
 import { safeJsonParse } from '../utils/helpers.js';
 
 const SUGGESTED_PROMPTS = [
@@ -38,6 +38,8 @@ export default function AIAssistant({ onMenuClick }) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [attachedImage, setAttachedImage] = useState(null); // { base64, mimeType, name }
   const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef(null);
@@ -46,6 +48,11 @@ export default function AIAssistant({ onMenuClick }) {
   const recognitionRef = useRef(null);
 
   const history = state.aiChatHistory || [];
+
+  const filteredHistory = history.filter(msg => {
+    if (!searchQuery.trim()) return true;
+    return msg.content.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   // Robust chat history persistence
   useEffect(() => {
@@ -58,12 +65,13 @@ export default function AIAssistant({ onMenuClick }) {
       } else {
         localStorage.setItem('aiChatHistory', JSON.stringify(history));
       }
-    } catch(e) { }
-  }, [history, updateState]);
+    } catch { /* ignore error */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history.length, updateState]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [history, isLoading]);
+  }, [history.length, isLoading]);
 
   const handleAttachImage = (e) => {
     const file = e.target.files?.[0];
@@ -197,6 +205,14 @@ You must optimize for fast answers and strictly incorporate product formulation 
     if (window.confirm('Clear all chat history?')) updateState({ aiChatHistory: [] });
   };
 
+  const handleDeleteMessage = (idx) => {
+    if (window.confirm('Delete this message?')) {
+      const newHistory = [...history];
+      newHistory.splice(idx, 1);
+      updateState({ aiChatHistory: newHistory });
+    }
+  };
+
   const modelName = state.settings?.selectedModel || 'gemini-2.0-flash';
   const hasKey = (state.settings?.apiKeys || []).length > 0;
 
@@ -212,17 +228,41 @@ You must optimize for fast answers and strictly incorporate product formulation 
             <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-slate-800">Herbicide AI Agent</h3>
-              <p className="text-xs text-slate-500 truncate">
-                Model: <span className="font-medium text-indigo-600">{modelName}</span>
-                {!hasKey && <span className="ml-2 text-red-500 font-semibold">⚠ No API key</span>}
-              </p>
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <div>
+                <h3 className="font-bold text-slate-800">Herbicide AI Agent</h3>
+                <p className="text-xs text-slate-500 truncate">
+                  Model: <span className="font-medium text-indigo-600">{modelName}</span>
+                  {!hasKey && <span className="ml-2 text-red-500 font-semibold">⚠ No API key</span>}
+                </p>
+              </div>
             </div>
             {history.length > 0 && (
-              <button onClick={handleClear} title="Clear chat" className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {isSearchOpen ? (
+                  <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden h-8 px-2 transition-all shadow-inner">
+                    <Search className="w-3.5 h-3.5 text-slate-400 mr-2" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Search messages..."
+                      className="text-xs outline-none bg-transparent w-32"
+                      autoFocus
+                    />
+                    <button onClick={() => { setIsSearchOpen(false); setSearchQuery(''); }} className="text-slate-400 hover:text-slate-600">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => setIsSearchOpen(true)} title="Search chat" className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition">
+                    <Search className="w-4 h-4" />
+                  </button>
+                )}
+                <button onClick={handleClear} title="Clear all chat history" className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
 
@@ -241,30 +281,46 @@ You must optimize for fast answers and strictly incorporate product formulation 
                   ))}
                 </div>
               </div>
+            ) : filteredHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 py-8">
+                <Search className="w-10 h-10 text-slate-200 mb-3" />
+                <p className="font-semibold text-slate-500 text-sm">No messages match your search.</p>
+              </div>
             ) : (
-              history.map((msg, i) => (
-                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
-                  {msg.role === 'assistant' && (
-                    <div className="w-7 h-7 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0 mr-2 mt-0.5">
-                      <Sparkles className="w-3.5 h-3.5" />
-                    </div>
-                  )}
-                  <div className={`relative max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-emerald-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>
-                    <div className="text-sm whitespace-pre-wrap leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: msg.content
-                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                        .replace(/\n/g, '<br/>') }} />
+              filteredHistory.map((msg) => {
+                const originalIndex = history.indexOf(msg);
+                return (
+                  <div key={originalIndex} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group relative mb-8`}>
                     {msg.role === 'assistant' && (
-                      <button onClick={() => handleCopy(msg.content, i)}
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-slate-200 transition text-slate-400">
-                        {copied === i ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      </button>
+                      <div className="w-7 h-7 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 shrink-0 mr-2 mt-0.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </div>
                     )}
+                    <div className={`relative max-w-[80%] rounded-2xl px-4 py-3 ${msg.role === 'user' ? 'bg-emerald-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm'}`}>
+                      <div className="text-sm whitespace-pre-wrap leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: msg.content
+                          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                          .replace(/\n/g, '<br/>') }} />
+                    </div>
+
+                    {/* Actions Menu (Copy/Delete) */}
+                    <div className={`absolute -bottom-8 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 ${msg.role === 'user' ? 'right-0' : 'left-0 ml-10'}`}>
+                      {msg.role === 'assistant' && (
+                        <button onClick={() => handleCopy(msg.content, originalIndex)} title="Copy message"
+                          className="p-1.5 rounded-lg bg-white shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-emerald-600 transition">
+                          {copied === originalIndex ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                      <button onClick={() => handleDeleteMessage(originalIndex)} title="Delete message"
+                        className="p-1.5 rounded-lg bg-white shadow-sm border border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-red-500 transition">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             {isLoading && (
               <div className="flex justify-start items-start gap-2">
