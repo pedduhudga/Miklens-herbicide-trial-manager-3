@@ -19,10 +19,73 @@ function calcWce(baseline, cover) {
   return Math.max(0, Math.min(100, ((baseline - cover) / baseline) * 100));
 }
 
+const LEGACY_ONLINE_QR_DEFAULTS = {
+  showFormulationName: true,
+  showInvestigator: true,
+  showDate: true,
+  showLocation: true,
+  showDosage: true,
+  showWeedSpecies: true,
+  showResult: true,
+  showWeather: true,
+  showIngredients: false,
+  showConclusion: true,
+  showPhotos: true,
+  showObservations: false,
+  showAISummary: false,
+  showReplication: false,
+};
+
+function mapOnlineFieldArrayToSettings(fields = []) {
+  const mapped = { ...LEGACY_ONLINE_QR_DEFAULTS };
+  mapped.showFormulationName = fields.includes('FormulationName');
+  mapped.showInvestigator = fields.includes('InvestigatorName');
+  mapped.showDate = fields.includes('Date');
+  mapped.showDosage = fields.includes('Dosage');
+  mapped.showLocation = fields.includes('Location');
+  mapped.showWeedSpecies = fields.includes('WeedSpecies');
+  mapped.showResult = fields.includes('Result');
+  if (fields.includes('Weather')) mapped.showWeather = true;
+  if (fields.includes('Conclusion')) mapped.showConclusion = true;
+  if (fields.includes('Photos')) mapped.showPhotos = true;
+  return mapped;
+}
+
+function readGlobalOnlineQrSettings() {
+  try {
+    const saved = localStorage.getItem('appSettings');
+    if (!saved) return { ...LEGACY_ONLINE_QR_DEFAULTS };
+    const parsed = JSON.parse(saved);
+    const raw = parsed?.qrOnlineFields;
+    if (Array.isArray(raw)) return mapOnlineFieldArrayToSettings(raw);
+    if (raw && typeof raw === 'object') return { ...LEGACY_ONLINE_QR_DEFAULTS, ...raw };
+  } catch {
+    // Ignore malformed local settings and use defaults.
+  }
+  return { ...LEGACY_ONLINE_QR_DEFAULTS };
+}
+
+function normalizeLiveQrSettings(rawSettings, globalSettings) {
+  const raw = safeJson(rawSettings, {});
+  const normalized = { ...globalSettings };
+
+  Object.entries(raw || {}).forEach(([key, value]) => {
+    normalized[key] = value;
+  });
+
+  if (Object.prototype.hasOwnProperty.call(raw, 'showInvestigatorName')) normalized.showInvestigator = raw.showInvestigatorName;
+  if (Object.prototype.hasOwnProperty.call(raw, 'showFormulationName')) normalized.showFormulationName = raw.showFormulationName;
+  if (Object.prototype.hasOwnProperty.call(raw, 'showObservations')) normalized.showObservations = raw.showObservations;
+  if (Object.prototype.hasOwnProperty.call(raw, 'showAISummary')) normalized.showAISummary = raw.showAISummary;
+
+  return normalized;
+}
+
 // ── Live Trial Page ───────────────────────────────────────────────────────────
 export default function LiveTrialPage() {
   const { id } = useParams();
   const [trial, setTrial] = useState(null);
+  const [formulation, setFormulation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -65,6 +128,12 @@ export default function LiveTrialPage() {
         const data = await fbGetById('trials', id);
         if (!data) throw new Error('Trial not found in database.');
         setTrial(data);
+        if (data.FormulationID) {
+          const formulationData = await fbGetById('formulations', data.FormulationID);
+          setFormulation(formulationData);
+        } else {
+          setFormulation(null);
+        }
       } catch (e) {
         setError(e.message || 'Failed to load trial.');
       } finally {
@@ -103,18 +172,23 @@ export default function LiveTrialPage() {
   const baseline = parseFloat(efficacy[0]?.weedCover ?? 0) || 0;
   const latest = efficacy.length ? efficacy[efficacy.length - 1] : null;
   const finalWce = latest ? calcWce(baseline, parseFloat(latest.weedCover ?? 0)) : null;
-  const isActive = trial.IsCompleted !== true && trial.IsCompleted !== 'true';
+  const isActive = String(trial.IsLive).toLowerCase() !== 'false';
 
   // Per-trial field visibility — defaults all to true if not set
-  const defaultShow = {
-    showFormulationName: true, showInvestigatorName: true, showDate: true,
-    showDosage: true, showLocation: true, showWeedSpecies: true,
-    showReplication: true, showResult: true,
-    showObservations: true, showPhotos: true, showAISummary: true,
-  };
-  const show = { ...defaultShow, ...safeJson(trial.LiveQRSettings, {}) };
+  const globalShow = readGlobalOnlineQrSettings();
+  const show = normalizeLiveQrSettings(trial.LiveQRSettings, globalShow);
+  const ingredients = safeJson(formulation?.IngredientsJSON, []);
 
   const statusColor = isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700';
+
+  if (!isActive) return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-200 flex items-center justify-center p-6">
+      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center border border-slate-200">
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Trial Concluded</h1>
+        <p className="text-sm text-slate-500">This trial is no longer active.</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-teal-50 font-sans">
@@ -129,10 +203,14 @@ export default function LiveTrialPage() {
               {isActive ? 'Active' : 'Completed'}
             </span>
           </div>
-          <h1 className="text-2xl font-bold leading-tight mt-1">{trial.FormulationName || 'Unnamed Trial'}</h1>
-          <p className="text-emerald-100 text-sm mt-1">
-            {fmtDate(trial.Date)}{trial.Location ? ` · ${trial.Location}` : ''}
-          </p>
+          <h1 className="text-2xl font-bold leading-tight mt-1">{show.showFormulationName ? (trial.FormulationName || 'Unnamed Trial') : 'Trial Report'}</h1>
+          {(show.showDate || show.showLocation) && (
+            <p className="text-emerald-100 text-sm mt-1">
+              {show.showDate ? fmtDate(trial.Date) : ''}
+              {show.showDate && show.showLocation && trial.Location ? ' · ' : ''}
+              {show.showLocation ? (trial.Location || '') : ''}
+            </p>
+          )}
         </div>
       </div>
 
@@ -145,7 +223,7 @@ export default function LiveTrialPage() {
             {[
               ['Trial ID', trial.ID, true],
               ['Product', trial.FormulationName || '—', show.showFormulationName],
-              ['Investigator', trial.InvestigatorName || '—', show.showInvestigatorName],
+              ['Investigator', trial.InvestigatorName || '—', show.showInvestigator],
               ['Application Date', fmtDate(trial.Date), show.showDate],
               ['Dosage', trial.Dosage || '—', show.showDosage],
               ['Location', trial.Location || '—', show.showLocation],
@@ -161,6 +239,39 @@ export default function LiveTrialPage() {
             ))}
           </div>
         </div>
+
+        {show.showWeather && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Weather</h2>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              {[
+                ['Temperature', trial.Temperature ? `${trial.Temperature} C` : '—'],
+                ['Humidity', trial.Humidity ? `${trial.Humidity}%` : '—'],
+                ['Wind', trial.Windspeed ? `${trial.Windspeed} km/h` : '—'],
+                ['Rain', trial.Rain ? `${trial.Rain} mm` : '—'],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-xs text-slate-400 font-semibold">{label}</p>
+                  <p className="text-slate-700 font-medium break-words">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {show.showIngredients && ingredients.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Formulation Ingredients</h2>
+            <ul className="space-y-2 text-sm text-slate-700">
+              {ingredients.map((ingredient, index) => (
+                <li key={`${ingredient.name || 'ingredient'}-${index}`} className="bg-slate-50 rounded-xl px-3 py-2">
+                  {ingredient.name || 'Unnamed ingredient'}
+                  {(ingredient.quantity || ingredient.unit) ? ` (${ingredient.quantity || ''} ${ingredient.unit || ''})`.trim() : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Efficacy Summary */}
         {show.showObservations && efficacy.length > 0 && (
@@ -231,6 +342,22 @@ export default function LiveTrialPage() {
             <pre className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed font-sans">
               {aiData.narrative}
             </pre>
+          </div>
+        )}
+
+        {show.showConclusion && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">Conclusion and Notes</h2>
+            <div className="space-y-3 text-sm text-slate-700">
+              <div>
+                <p className="text-xs text-slate-400 font-semibold mb-1">Conclusion</p>
+                <p>{trial.Conclusion || 'No conclusion provided.'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 font-semibold mb-1">Notes</p>
+                <p>{trial.Notes || 'No notes provided.'}</p>
+              </div>
+            </div>
           </div>
         )}
 
