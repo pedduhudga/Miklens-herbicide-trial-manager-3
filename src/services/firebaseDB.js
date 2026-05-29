@@ -3,16 +3,28 @@
 // the rest of the app can call these with minimal changes.
 
 import {
-  collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc,
-  deleteDoc, query, where, orderBy, limit, writeBatch,
-  serverTimestamp, Timestamp
-} from 'firebase/firestore';
-import { getFirebaseDB, COLLECTIONS } from './firebase.js';
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  writeBatch,
+  serverTimestamp,
+  Timestamp,
+} from "firebase/firestore";
+import { getFirebaseDB, COLLECTIONS } from "./firebase.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function cleanForFirestore(obj) {
-  if (!obj || typeof obj !== 'object') return obj;
+  if (!obj || typeof obj !== "object") return obj;
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
     if (v === undefined) continue;
@@ -26,7 +38,7 @@ function snapToRecord(snap) {
 }
 
 function snapsToArray(snapshot) {
-  return snapshot.docs.map(d => ({ ID: d.id, ...d.data() }));
+  return snapshot.docs.map((d) => ({ ID: d.id, ...d.data() }));
 }
 
 // ─── generic CRUD ───────────────────────────────────────────────────────────
@@ -35,9 +47,11 @@ export async function fbGetAll(collectionName, userId = null) {
   const db = getFirebaseDB();
   let q = collection(db, collectionName);
   if (userId) {
-    q = query(collection(db, collectionName), where('CreatedBy', '==', userId));
+    q = query(collection(db, collectionName), where("CreatedBy", "==", userId));
   }
-  const snap = await getDocs(q instanceof Function ? q : collection(db, collectionName));
+  const snap = await getDocs(
+    q instanceof Function ? q : collection(db, collectionName),
+  );
   return snapsToArray(snap);
 }
 
@@ -53,7 +67,7 @@ export async function fbAdd(collectionName, data, userId) {
   const record = cleanForFirestore({
     ...data,
     ID: id,
-    CreatedBy: userId || data.CreatedBy || '',
+    CreatedBy: userId || data.CreatedBy || "",
     _createdAt: serverTimestamp(),
     _updatedAt: serverTimestamp(),
   });
@@ -88,7 +102,7 @@ export async function fbBatchWrite(collectionName, records, userId) {
     const record = cleanForFirestore({
       ...data,
       ID: id,
-      CreatedBy: userId || data.CreatedBy || '',
+      CreatedBy: userId || data.CreatedBy || "",
       _createdAt: serverTimestamp(),
       _updatedAt: serverTimestamp(),
     });
@@ -206,11 +220,40 @@ export async function fbGetUserSettings(userId) {
 
 export async function fbSaveUserSettings(userId, settings) {
   const db = getFirebaseDB();
-  await setDoc(doc(db, COLLECTIONS.settings, userId), {
-    ...cleanForFirestore(settings),
-    _updatedAt: serverTimestamp(),
-  }, { merge: true });
+  await setDoc(
+    doc(db, COLLECTIONS.settings, userId),
+    {
+      ...cleanForFirestore(settings),
+      _updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
   return { success: true };
+}
+
+// ─── Global QR settings (publicly readable — controls LiveTrialPage) ─────────
+// Stored at settings/globalQR so any device scanning a QR code can read it
+// without authentication. Firestore rules must allow:
+//   match /settings/globalQR { allow read: if true; }
+
+export async function fbSaveGlobalQRSettings(qrOnlineFields) {
+  const db = getFirebaseDB();
+  await setDoc(
+    doc(db, COLLECTIONS.settings, "globalQR"),
+    { qrOnlineFields, _updatedAt: serverTimestamp() },
+    { merge: true },
+  );
+  return { success: true };
+}
+
+export async function fbGetGlobalQRSettings() {
+  try {
+    const db = getFirebaseDB();
+    const snap = await getDoc(doc(db, COLLECTIONS.settings, "globalQR"));
+    return snap.exists() ? snap.data() : null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── Analysis Log ────────────────────────────────────────────────────────────
@@ -224,9 +267,9 @@ export async function fbAddAnalysisLog(data, userId) {
 export async function fbGetSprayLogs(userId, projectId = null, trialId = null) {
   const db = getFirebaseDB();
   let conditions = [];
-  if (userId) conditions.push(where('CreatedBy', '==', userId));
-  if (projectId) conditions.push(where('ProjectID', '==', projectId));
-  if (trialId) conditions.push(where('TrialID', '==', trialId));
+  if (userId) conditions.push(where("CreatedBy", "==", userId));
+  if (projectId) conditions.push(where("ProjectID", "==", projectId));
+  if (trialId) conditions.push(where("TrialID", "==", trialId));
   const q = conditions.length
     ? query(collection(db, COLLECTIONS.sprayLogs), ...conditions)
     : collection(db, COLLECTIONS.sprayLogs);
@@ -282,13 +325,14 @@ export async function fbImportAll(dataMap, userId) {
 
 export async function fbGetAllData(userId, isAdmin = false) {
   const ownerId = isAdmin ? null : userId;
-  const [trials, formulations, ingredients, organisations, projects, blocks] = await Promise.all([
-    fbGetTrials(ownerId),
-    fbGetFormulations(ownerId),
-    fbGetIngredients(ownerId),
-    fbGetOrganisations(ownerId),
-    fbGetProjects(ownerId),
-    fbGetBlocks(ownerId),
-  ]);
+  const [trials, formulations, ingredients, organisations, projects, blocks] =
+    await Promise.all([
+      fbGetTrials(ownerId),
+      fbGetFormulations(ownerId),
+      fbGetIngredients(ownerId),
+      fbGetOrganisations(ownerId),
+      fbGetProjects(ownerId),
+      fbGetBlocks(ownerId),
+    ]);
   return { trials, formulations, ingredients, organisations, projects, blocks };
 }
