@@ -158,7 +158,9 @@ export default function Trials({ onMenuClick }) {
 
   // --- Bulk QR Card Print ---
   const [isBulkQrModalOpen, setIsBulkQrModalOpen] = useState(false);
-  const [qrCardSize, setQrCardSize] = useState(state.settings?.cardPrintSize || 'id-card');
+  const [qrCardSize, setQrCardSize] = useState(
+    state.settings?.cardSize === 'A4' ? 'a4' : state.settings?.cardSize === 'A6' ? 'a6' : 'id-card'
+  );
   const bulkQrRef = useRef(null);
 
   // ── ROUTING EFFECT ─────────────────────────────────────────────────
@@ -1285,6 +1287,174 @@ export default function Trials({ onMenuClick }) {
   };
 
   // ── RESULT BADGE ──────────────────────────────────────────────────
+  const sanitizePrintHtml = useCallback((value) => {
+    if (value == null) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }, []);
+
+  const getTrialCardPrintSettings = useCallback(() => {
+    const sizeMap = {
+      'id-card': { cardWidth: 9, cardHeight: 6, label: 'ID' },
+      a6: { cardWidth: 10, cardHeight: 14, label: 'A6' },
+      a4: { cardWidth: 19, cardHeight: 13, label: 'A4' },
+    };
+    return sizeMap[qrCardSize] || sizeMap['id-card'];
+  }, [qrCardSize]);
+
+  const buildPrintableTrialUrl = useCallback((trial) => {
+    const scriptUrl = String(state.settings?.scriptUrl || '').trim();
+    const sheetId = String(state.settings?.sheetId || '').trim();
+    if (scriptUrl && sheetId) {
+      const params = new URLSearchParams({ trialId: trial.ID, spreadsheetId: sheetId });
+      return `${scriptUrl}?${params.toString()}`;
+    }
+    const appBase = window.location.origin + window.location.pathname;
+    return `${appBase}#/live/${trial.ID}`;
+  }, [state.settings?.scriptUrl, state.settings?.sheetId]);
+
+  const generateQrCodeDataUrl = useCallback(async (dataString) => {
+    try {
+      return await QRCodeLib.toDataURL(dataString, {
+        width: 256,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+        errorCorrectionLevel: 'M',
+      });
+    } catch (error) {
+      console.error('QR code generation failed:', error);
+      return null;
+    }
+  }, []);
+
+  const buildTrialCardsCss = useCallback((cardWidth, cardHeight) => `
+      @media print {
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .no-print { display: none !important; }
+      }
+      body { margin: 0.5cm; font-family: sans-serif; background: #ffffff; }
+      .print-header {
+        margin-bottom: 0.5cm;
+        padding: 0.35cm 0.45cm;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        background: #f8fafc;
+      }
+      .print-header h2 { margin: 0 0 0.15cm; font-size: 14pt; color: #0f172a; }
+      .print-header p { margin: 0; font-size: 9pt; color: #64748b; }
+      .page {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(${cardWidth}cm, 1fr));
+        gap: 0.5cm;
+        page-break-after: always;
+      }
+      .card {
+        width: ${cardWidth}cm;
+        height: ${cardHeight}cm;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 0.4cm;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        page-break-inside: avoid;
+        overflow: hidden;
+        position: relative;
+        background: #ffffff;
+      }
+      .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.3cm; }
+      .card-header h3 {
+        font-size: 12pt;
+        margin: 0;
+        font-weight: bold;
+        color: #2c5282;
+        max-width: 65%;
+        line-height: 1.2;
+      }
+      .logo { max-width: 2.5cm; max-height: 1.2cm; object-fit: contain; flex-shrink: 0; }
+      .card-body { padding-right: 2.9cm; }
+      .card-body p { font-size: 9pt; margin: 0.1cm 0; }
+      .card-footer {
+        position: absolute;
+        right: 0.4cm;
+        bottom: 0.4cm;
+        text-align: right;
+      }
+      .qr-code { width: 2.5cm; height: 2.5cm; display: block; }
+    `, []);
+
+  const buildTrialCardsMarkup = useCallback(async (selectedTrials, companyLogo) => {
+    const cards = [];
+    for (const trial of selectedTrials) {
+      const qrCodeUrl = await generateQrCodeDataUrl(buildPrintableTrialUrl(trial));
+      const formattedDate = trial.Date ? new Date(trial.Date).toLocaleDateString() : '';
+      cards.push(`
+        <div class="card">
+          <div>
+            <div class="card-header">
+              <h3>${sanitizePrintHtml(trial.FormulationName || 'Untitled Trial')}</h3>
+              ${companyLogo ? `<img src="${companyLogo}" class="logo" alt="Logo">` : ''}
+            </div>
+            <div class="card-body">
+              <p><strong>Investigator:</strong> ${sanitizePrintHtml(trial.InvestigatorName || '')}</p>
+              <p><strong>Date:</strong> ${sanitizePrintHtml(formattedDate)}</p>
+              <p><strong>Dosage:</strong> ${sanitizePrintHtml(trial.Dosage || '')}</p>
+            </div>
+          </div>
+          <div class="card-footer">
+            ${qrCodeUrl ? `<img src="${qrCodeUrl}" class="qr-code" alt="QR Code">` : ''}
+          </div>
+        </div>
+      `);
+    }
+    return `<div class="page">${cards.join('')}</div>`;
+  }, [buildPrintableTrialUrl, generateQrCodeDataUrl, sanitizePrintHtml]);
+
+  const generateBulkQrCardsLegacy = useCallback(async () => {
+    const selectedTrials = trials.filter(t => selectedForBulk.has(t.ID));
+    if (selectedTrials.length === 0) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: 'Please allow popups to print QR cards', type: 'error' } }));
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: 'Generating print layout...', type: 'info' } }));
+
+    const { cardWidth, cardHeight, label } = getTrialCardPrintSettings();
+    const companyLogo = state.settings?.logoBase64 || '';
+    const cardsMarkup = await buildTrialCardsMarkup(selectedTrials, companyLogo);
+    const cardsCss = buildTrialCardsCss(cardWidth, cardHeight);
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Print Trial Cards</title>
+  <style>${cardsCss}</style>
+</head>
+<body>
+  <div class="print-header no-print">
+    <h2>Trial Cards</h2>
+    <p>${selectedTrials.length} card${selectedTrials.length > 1 ? 's' : ''} • Size ${label}</p>
+  </div>
+  ${cardsMarkup}
+</body>
+</html>`);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  }, [buildTrialCardsCss, buildTrialCardsMarkup, getTrialCardPrintSettings, selectedForBulk, state.settings?.logoBase64, trials]);
+
   const ResultBadge = ({ result }) => {
     if (!result) return null;
     const cls = RESULT_COLORS[result] || 'bg-slate-100 text-slate-600';
@@ -3496,10 +3666,10 @@ Exactly 2 sentences. Follow this structure:
               <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-600">
                 <p className="font-semibold mb-1">Each card includes:</p>
                 <ul className="space-y-0.5 list-disc list-inside">
-                  <li>QR code with trial ID and details</li>
+                  <li>QR code linked to the trial report</li>
                   <li>Formulation name</li>
-                  <li>Location and date</li>
-                  <li>Short trial ID for reference</li>
+                  <li>Investigator and date</li>
+                  <li>Dosage and optional company logo</li>
                 </ul>
               </div>
 
@@ -3519,7 +3689,7 @@ Exactly 2 sentences. Follow this structure:
                 Cancel
               </button>
               <button
-                onClick={() => { generateBulkQrCards(); setIsBulkQrModalOpen(false); }}
+                onClick={() => { generateBulkQrCardsLegacy(); setIsBulkQrModalOpen(false); }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
               >
                 <Printer className="w-4 h-4" />
