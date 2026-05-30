@@ -124,8 +124,10 @@ export default function Formulations({ onMenuClick }) {
   const sortedFormulations = [...(state.formulations || [])]
     .filter(f => !searchTerm || f.Name.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => {
-      const aTs = new Date(a.CreatedAt || 0).getTime() || 0;
-      const bTs = new Date(b.CreatedAt || 0).getTime() || 0;
+      const aDate = a.CreatedAt || a._createdAt;
+      const bDate = b.CreatedAt || b._createdAt;
+      const aTs = aDate ? new Date(aDate).getTime() : 0;
+      const bTs = bDate ? new Date(bDate).getTime() : 0;
       return bTs - aTs;
     });
 
