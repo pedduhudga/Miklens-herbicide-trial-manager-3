@@ -81,20 +81,26 @@ export default function Formulations({ onMenuClick }) {
       return;
     }
 
+    // Use a numeric timestamp string so sort always works correctly
+    const nowISO = new Date().toISOString();
+
     const payload = {
       ID: editingForm ? editingForm.ID : Date.now().toString(),
       Name: name,
       Notes: notes,
       IngredientsJSON: JSON.stringify(cleanIngs),
       EstimatedCost: calculateEstimatedCost(),
-      CreatedAt: editingForm ? editingForm.CreatedAt : new Date().toISOString()
+      // Keep original CreatedAt when editing; set fresh ISO string for new/duplicate
+      CreatedAt: editingForm ? editingForm.CreatedAt : nowISO,
     };
 
     let newForms = [...state.formulations];
     if (editingForm) {
+      // Replace in-place, then re-sort will handle position
       newForms = newForms.map(f => f.ID === payload.ID ? payload : f);
     } else {
-      newForms.push(payload);
+      // ✅ Prepend so the new item is immediately at the top
+      newForms = [payload, ...newForms];
     }
     updateState({ formulations: newForms });
     setIsModalOpen(false);
@@ -121,24 +127,25 @@ export default function Formulations({ onMenuClick }) {
     }
   };
 
-  // Helper to get timestamp from various date formats (ISO string, Firestore Timestamp, etc.)
+  // Helper to get a comparable timestamp from various date formats
   const getTimestamp = (dateValue) => {
     if (!dateValue) return 0;
-    // Firestore Timestamp object has seconds and nanoseconds
+    // Firestore Timestamp object { seconds, nanoseconds }
     if (typeof dateValue === 'object' && dateValue.seconds) {
       return dateValue.seconds * 1000;
     }
-    // ISO string or other date formats
+    // ISO string or numeric string (Date.now().toString())
     const parsed = new Date(dateValue).getTime();
     return isNaN(parsed) ? 0 : parsed;
   };
 
   const sortedFormulations = [...(state.formulations || [])]
     .filter(f => !searchTerm || f.Name.toLowerCase().includes(searchTerm.toLowerCase()))
+    // ✅ Newest first — highest timestamp at index 0
     .sort((a, b) => {
       const aTs = getTimestamp(a.CreatedAt || a._createdAt);
       const bTs = getTimestamp(b.CreatedAt || b._createdAt);
-      return bTs - aTs;
+      return bTs - aTs; // descending: newest on top
     });
 
   return (
