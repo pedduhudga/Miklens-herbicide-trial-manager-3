@@ -121,13 +121,23 @@ export default function Formulations({ onMenuClick }) {
     }
   };
 
+  // Helper to get timestamp from various date formats (ISO string, Firestore Timestamp, etc.)
+  const getTimestamp = (dateValue) => {
+    if (!dateValue) return 0;
+    // Firestore Timestamp object has seconds and nanoseconds
+    if (typeof dateValue === 'object' && dateValue.seconds) {
+      return dateValue.seconds * 1000;
+    }
+    // ISO string or other date formats
+    const parsed = new Date(dateValue).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   const sortedFormulations = [...(state.formulations || [])]
     .filter(f => !searchTerm || f.Name.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => {
-      const aDate = a.CreatedAt || a._createdAt;
-      const bDate = b.CreatedAt || b._createdAt;
-      const aTs = aDate ? new Date(aDate).getTime() : 0;
-      const bTs = bDate ? new Date(bDate).getTime() : 0;
+      const aTs = getTimestamp(a.CreatedAt || a._createdAt);
+      const bTs = getTimestamp(b.CreatedAt || b._createdAt);
       return bTs - aTs;
     });
 
