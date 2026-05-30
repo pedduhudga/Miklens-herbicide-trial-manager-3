@@ -88,7 +88,7 @@ export default function Trials({ onMenuClick }) {
 
   // --- Bulk Edit modal ---
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
-  const [bulkEditForm, setBulkEditForm] = useState({ InvestigatorName: '', Location: '', Result: '', Notes: '' });
+  const [bulkEditForm, setBulkEditForm] = useState({ InvestigatorName: '', Location: '', Result: '', Notes: '', Date: '', Dosage: '' });
 
   // --- Date range filter ---
   const [filterDateStart, setFilterDateStart] = useState('');
@@ -116,6 +116,8 @@ export default function Trials({ onMenuClick }) {
   // --- Duplicate modal (formulation picker) ---
   const [duplicateModal, setDuplicateModal] = useState(null); // trial to duplicate
   const [duplicateFormulation, setDuplicateFormulation] = useState('');
+  const [duplicateDate, setDuplicateDate] = useState('');
+  const [duplicateDosage, setDuplicateDosage] = useState('');
 
   // --- Quick-photo target (from card Photo button) ---
   const [quickPhotoTrial, setQuickPhotoTrial] = useState(null);
@@ -1508,6 +1510,8 @@ export default function Trials({ onMenuClick }) {
 
   const handleDuplicate = useCallback((trial) => {
     setDuplicateFormulation(trial.FormulationName || '');
+    setDuplicateDate(new Date().toISOString().split('T')[0]);
+    setDuplicateDosage('');
     setDuplicateModal(trial);
   }, []);
 
@@ -1521,7 +1525,8 @@ export default function Trials({ onMenuClick }) {
       ID: undefined,
       FormulationName: duplicateFormulation,
       FormulationID: formMatch ? formMatch.ID : (trial.FormulationID || ''),
-      Date: new Date().toISOString().split('T')[0],
+      Date: duplicateDate || new Date().toISOString().split('T')[0],
+      Dosage: duplicateDosage.trim() !== '' ? duplicateDosage.trim() : (trial.Dosage || ''),
       IsCompleted: false, ControlFinalized: false,
       FinalizationDate: '', FinalControlDuration: '',
       PhotoURLs: '[]', WeedPhotosJSON: '[]',
@@ -1537,7 +1542,7 @@ export default function Trials({ onMenuClick }) {
     } catch(e) {
       window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: 'Duplicate failed', type: 'error' } }));
     }
-  }, [duplicateModal, duplicateFormulation, formulations, trials, getAppState, updateState]);
+  }, [duplicateModal, duplicateFormulation, duplicateDate, duplicateDosage, formulations, trials, getAppState, updateState]);
 
   const handleQuickRate = useCallback(async (trial, rating) => {
     const newRating = trial.Result === rating ? '' : rating;
@@ -2129,6 +2134,16 @@ Exactly 2 sentences. Follow this structure:
                   className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="Leave blank to keep existing" />
               </div>
               <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Date</label>
+                <input type="date" value={bulkEditForm.Date} onChange={e => setBulkEditForm(p => ({...p, Date: e.target.value}))}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Dosage</label>
+                <input type="text" value={bulkEditForm.Dosage} onChange={e => setBulkEditForm(p => ({...p, Dosage: e.target.value}))}
+                  className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400" placeholder="Leave blank to keep existing" />
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Result</label>
                 <select value={bulkEditForm.Result} onChange={e => setBulkEditForm(p => ({...p, Result: e.target.value}))}
                   className="w-full px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400">
@@ -2149,6 +2164,8 @@ Exactly 2 sentences. Follow this structure:
                 if (bulkEditForm.InvestigatorName.trim()) updates.InvestigatorName = bulkEditForm.InvestigatorName.trim();
                 if (bulkEditForm.Location.trim()) updates.Location = bulkEditForm.Location.trim();
                 if (bulkEditForm.Result) updates.Result = bulkEditForm.Result;
+                if (bulkEditForm.Date) updates.Date = bulkEditForm.Date;
+                if (bulkEditForm.Dosage.trim()) updates.Dosage = bulkEditForm.Dosage.trim();
                 const ids = Array.from(selectedForBulk);
                 const updated = trials.map(t => {
                   if (!ids.includes(t.ID)) return t;
@@ -2160,7 +2177,7 @@ Exactly 2 sentences. Follow this structure:
                 for (const t of updated.filter(t => ids.includes(t.ID))) {
                   try { await updateTrial(t, getAppState); } catch(e) {}
                 }
-                setBulkEditForm({ InvestigatorName: '', Location: '', Result: '', Notes: '' });
+                setBulkEditForm({ InvestigatorName: '', Location: '', Result: '', Notes: '', Date: '', Dosage: '' });
                 setIsBulkEditOpen(false);
                 clearBulk();
                 window.dispatchEvent(new CustomEvent('app:toast', { detail: { msg: `${ids.length} trials updated`, type: 'success' } }));
@@ -2200,7 +2217,26 @@ Exactly 2 sentences. Follow this structure:
                 className="w-full mt-1 px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
               />
             </div>
-            <p className="text-xs text-slate-400 bg-slate-50 rounded-lg p-2 border">Location, dosage, weed species and other settings will be copied. Photos, observations and results will be cleared.</p>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Date</label>
+              <input
+                type="date"
+                value={duplicateDate}
+                onChange={e => setDuplicateDate(e.target.value)}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Dosage</label>
+              <input
+                type="text"
+                value={duplicateDosage}
+                onChange={e => setDuplicateDosage(e.target.value)}
+                placeholder={`Leave blank to copy (${duplicateModal.Dosage || 'N/A'})`}
+                className="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+            </div>
+            <p className="text-xs text-slate-400 bg-slate-50 rounded-lg p-2 border">Location, weed species and other settings will be copied. Photos, observations and results will be cleared.</p>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setDuplicateModal(null)} className="px-4 py-2 text-sm rounded-lg border text-slate-600 hover:bg-slate-50">Cancel</button>
               <button
